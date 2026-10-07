@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { analyzeUrl } from './lib/api';
 import type { ProductSnapshot } from './lib/types';
 import SnapshotCard from './components/SnapshotCard';
+import ManualEntryCard from './components/ManualEntryCard';
 import { SnapshotSkeleton } from './components/Skeletons';
 
 const SAMPLES = [
@@ -27,7 +28,7 @@ function looksLikeProductUrl(raw: string): boolean {
 function friendlyAnalyzeError(code: string): string {
   switch (code) {
     case 'fetch blocked':
-      return "Couldn't fetch this product (the site blocked us). Try another URL.";
+      return "Couldn't fetch this product — the site blocked our automatic read (common from cloud servers). Enter the details manually below.";
     case 'blocked by robots.txt':
       return 'This site disallows automated reads of that page (robots.txt). Try another URL.';
     case 'fetch timed out':
@@ -46,6 +47,7 @@ export default function HomePage() {
   const [status, setStatus] = useState<Status>('idle');
   const [error, setError] = useState('');
   const [snapshot, setSnapshot] = useState<ProductSnapshot | null>(null);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   // Ref guard (not state): two rapid Enters can fire before the re-render
   // disables the button, which would send duplicate analyze requests.
   const busyRef = useRef(false);
@@ -60,19 +62,23 @@ export default function HomePage() {
     }
     busyRef.current = true;
     setStatus('loading');
+    setFailedUrl(null);
     setError('');
     try {
       const { snapshot } = await analyzeUrl(trimmed);
       if (snapshot.error) {
         setError(friendlyAnalyzeError(snapshot.error));
         setStatus('error');
+        setFailedUrl(trimmed);
         return;
       }
       setSnapshot(snapshot);
+      setFailedUrl(null);
       setStatus('done');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
       setStatus('error');
+      setFailedUrl(trimmed);
     } finally {
       busyRef.current = false;
     }
@@ -143,6 +149,10 @@ export default function HomePage() {
         >
           {error}
         </div>
+      )}
+
+      {status === 'error' && failedUrl && (
+        <ManualEntryCard key={failedUrl} initialUrl={failedUrl} />
       )}
 
       {status === 'idle' && (
